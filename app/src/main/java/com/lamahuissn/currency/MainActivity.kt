@@ -30,12 +30,14 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lamahuissn.currency.data.CurrencyCatalog
 import com.lamahuissn.currency.ui.AddCurrencyScreen
-import com.lamahuissn.currency.ui.AppViewModel
 import com.lamahuissn.currency.ui.ChartScreen
+import com.lamahuissn.currency.ui.ChartViewModel
 import com.lamahuissn.currency.ui.ConvertScreen
+import com.lamahuissn.currency.ui.ConvertViewModel
 import com.lamahuissn.currency.ui.CountScreen
 import com.lamahuissn.currency.ui.CurrencyTheme
 import com.lamahuissn.currency.ui.KeypadSheet
+import com.lamahuissn.currency.ui.MetalsViewModel
 import com.lamahuissn.currency.ui.NavTab
 import com.lamahuissn.currency.ui.PairPickerScreen
 import com.lamahuissn.currency.ui.Sfx
@@ -57,24 +59,27 @@ class MainActivity : ComponentActivity() {
 
     /**
      * While the app is on screen, gold and silver tick live — those are the two numbers that move
-     * during the day. The same instance the Compose tree uses, so the list updates in place; the
-     * ticker is cancelled in onPause, so a pocketed phone polls nothing.
+     * during the day. The ticker is cancelled in onPause, so a pocketed phone polls nothing.
      */
     override fun onResume() {
         super.onResume()
-        ViewModelProvider(this)[AppViewModel::class.java].startMetalsTicker()
+        val convert = ViewModelProvider(this)[ConvertViewModel::class.java]
+        ViewModelProvider(this)[MetalsViewModel::class.java].startMetalsTicker(convert)
     }
 
     override fun onPause() {
         super.onPause()
-        ViewModelProvider(this)[AppViewModel::class.java].stopMetalsTicker()
+        ViewModelProvider(this)[MetalsViewModel::class.java].stopMetalsTicker()
     }
 }
 
 @Composable
-private fun Root(viewModel: AppViewModel = viewModel()) {
-    val convert by viewModel.convert.collectAsState()
-    val chart by viewModel.chart.collectAsState()
+private fun Root(
+    convertViewModel: ConvertViewModel = viewModel(),
+    chartViewModel: ChartViewModel = viewModel(),
+) {
+    val convert by convertViewModel.convert.collectAsState()
+    val chart by chartViewModel.chart.collectAsState()
 
     // Only the app's own switch decides now: gating on the phone's "Touch sounds" setting is what
     // silenced the tick, because that switch is off by default.
@@ -141,24 +146,24 @@ private fun Root(viewModel: AppViewModel = viewModel()) {
                     state = convert,
                     onRowTap = { code -> keypadFor = code },
                     onAdd = { addingCurrency = true },
-                    onRemove = { code -> viewModel.removeTarget(code) },
-                    onPin = { code -> viewModel.togglePin(code) },
-                    onMove = { from, to -> viewModel.moveTarget(from, to) },
-                    onSort = { byValue -> viewModel.sortTargets(byValue) },
-                    onReset = { viewModel.resetTargets() },
-                    onRefresh = { viewModel.refresh() },
-                    onToggleSound = { viewModel.toggleSound() },
+                    onRemove = { code -> convertViewModel.removeTarget(code) },
+                    onPin = { code -> convertViewModel.togglePin(code) },
+                    onMove = { from, to -> convertViewModel.moveTarget(from, to) },
+                    onSort = { byValue -> convertViewModel.sortTargets(byValue) },
+                    onReset = { convertViewModel.resetTargets() },
+                    onRefresh = { convertViewModel.refresh() },
+                    onToggleSound = { convertViewModel.toggleSound() },
                     onSelectTab = { selected ->
                         tab = selected
-                        if (selected == NavTab.Chart) viewModel.setChartPair(chart.base, chart.quote)
+                        if (selected == NavTab.Chart) chartViewModel.setChartPair(chart.base, chart.quote)
                     },
                     listState = convertList,
                 )
             } else if (current == NavTab.Chart) {
                 ChartScreen(
                     state = chart,
-                    onPeriod = { viewModel.setChartPeriod(it) },
-                    onSwap = { viewModel.swapChartPair() },
+                    onPeriod = { chartViewModel.setChartPeriod(it) },
+                    onSwap = { chartViewModel.swapChartPair() },
                     onPickBase = { pickingPair = "base" },
                     onPickQuote = { pickingPair = "quote" },
                     onSelectTab = { tab = it },
@@ -192,7 +197,7 @@ private fun Root(viewModel: AppViewModel = viewModel()) {
                 onDismiss = { keypadFor = null },
                 onConvert = { amount ->
                     // Entering an amount for another currency re-bases the whole list on it.
-                    viewModel.setBaseAndAmount(code, amount)
+                    convertViewModel.setBaseAndAmount(code, amount)
                     keypadFor = null
                 },
             )
@@ -211,9 +216,9 @@ private fun Root(viewModel: AppViewModel = viewModel()) {
                     if (code == convert.base) {
                         // Nothing to do: the input line already is this currency.
                     } else if (convert.targets.contains(code)) {
-                        viewModel.removeTarget(code)
+                        convertViewModel.removeTarget(code)
                     } else {
-                        viewModel.addTarget(code)
+                        convertViewModel.addTarget(code)
                     }
                 },
                 onClose = { addingCurrency = false },
@@ -243,8 +248,8 @@ private fun Root(viewModel: AppViewModel = viewModel()) {
                 options = options,
                 selected = if (baseIsPicking) chart.base else chart.quote,
                 onPick = { code ->
-                    if (baseIsPicking) viewModel.setChartPair(code, chart.quote)
-                    else viewModel.setChartPair(chart.base, code)
+                    if (baseIsPicking) chartViewModel.setChartPair(code, chart.quote)
+                    else chartViewModel.setChartPair(chart.base, code)
                     pickingPair = null
                 },
                 onClose = { pickingPair = null },
